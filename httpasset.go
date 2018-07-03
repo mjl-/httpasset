@@ -24,8 +24,6 @@ An example:
 		// fs operations return an error.
 		httpFS = httpasset.Fs()
 		if err := httpasset.Error(); err != nil {
-			log.Fatal(err)
-			// or alternatively fallback to to local file system:
 			log.Print("falling back to local assets")
 			httpFS = http.Dir("assets")
 		}
@@ -152,7 +150,7 @@ func Fs() http.FileSystem {
 // so that allows us to calculate the original size of the zip file.
 // which in turn allows us to use godoc's zipfs to serve the zip file withend.
 func open() (http.FileSystem, error) {
-	bin, err := os.Open(os.Args[0])
+	bin, err := binself()
 	if err != nil {
 		return nil, err
 	}
