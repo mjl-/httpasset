@@ -95,8 +95,11 @@ import (
 )
 
 var (
-	NotDirErr    = errors.New("not a directory")
-	LocateZipErr = errors.New("could not locate zip file, no end-of-central-directory signature found")
+	// ErrNotDir is returned for a Readdir on non-directory file.
+	ErrNotDir = errors.New("not a directory")
+
+	// ErrLocateZip is returned if no trailing zip file could be detected in the binary.
+	ErrLocateZip = errors.New("could not locate zip file, no end-of-central-directory signature found")
 )
 
 type opener interface {
@@ -174,7 +177,7 @@ func open() (http.FileSystem, error) {
 	o := int64(findSignatureInBlock(buf))
 	if o < 0 {
 		bin.Close()
-		return nil, LocateZipErr
+		return nil, ErrLocateZip
 	}
 	cdirsize := int64(binary.LittleEndian.Uint32(buf[o+12:]))
 	cdiroff := int64(binary.LittleEndian.Uint32(buf[o+16:]))
