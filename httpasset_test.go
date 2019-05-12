@@ -2,6 +2,7 @@ package httpasset
 
 import (
 	"archive/zip"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -30,9 +31,14 @@ func TestHttpasset(t *testing.T) {
 		t.Fatalf("failed httpasset unexpectedly succeeded opening a file")
 	}
 
-	// Let's append a zip file to the binary under test. Pretty gross indeed. (:
-	nf, err := os.OpenFile(f.Name(), os.O_APPEND|os.O_WRONLY, 0644)
-	tcheck(err, "opening running binary for writing")
+	// Let's append a zip file to the binary under test.
+	// We have to make a copy because on some systems (ubuntu 16 lts is one) you cannot write to a running binary.
+	newName := f.Name() + ".more"
+	nf, err := os.Create(newName)
+	tcheck(err, "creating new binary with zip")
+	defer os.Remove(newName)
+	_, err = io.Copy(nf, f)
+	tcheck(err, "copy binary")
 	f.Close()
 
 	w := zip.NewWriter(nf)
@@ -60,6 +66,7 @@ func TestHttpasset(t *testing.T) {
 	nf.Close()
 
 	// Retry now that we added a zip file to the binary under test.
+	os.Args[0] = newName
 	Close()
 	Fs()
 	err = Error()
