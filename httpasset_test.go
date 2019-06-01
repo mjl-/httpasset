@@ -18,18 +18,59 @@ func TestHttpasset(t *testing.T) {
 		}
 	}
 
+	verifyFile := func(zf http.File, name, contents string, compressed bool) {
+		t.Helper()
+
+		buf, err := ioutil.ReadAll(zf)
+		tcheck(err, "reading file from zip")
+		if string(buf) != contents {
+			t.Fatalf("bad content reading file from zip: got %#v, expected %#v\n", string(buf), contents)
+		}
+
+		off, err := zf.Seek(1, 0)
+		if compressed {
+			if err != errCompressedSeek {
+				t.Fatalf("seek on compressed file: got %v, expected errCompressedSeek", err)
+			}
+		} else {
+			tcheck(err, "seek on uncompressed file")
+			if off != 1 {
+				t.Fatalf("offset after seek: got %d, expected 1", off)
+			}
+		}
+
+		st, err := zf.Stat()
+		tcheck(err, "stat on file")
+		if st.IsDir() || st.Name() != name {
+			t.Fatalf("stat file, got %v %v", st.IsDir(), st.Name())
+		}
+		_, err = zf.Readdir(1)
+		if err == nil {
+			t.Fatalf("got nil for readdir on file, expected error")
+		}
+	}
+
 	f, err := binself()
 	tcheck(err, "opening running binary")
 
 	// Opening zip file in test binary should fail, it doesn't have a zip file yet.
-	Fs()
-	if Error() == nil {
+	_, err = ZipFS()
+	if err == nil {
 		t.Fatalf("opening httpasset in test binary: got success, expected error")
 	}
-	_, err = fs.Open("/test.txt")
-	if err == nil {
-		t.Fatalf("failed httpasset unexpectedly succeeded opening a file")
+
+	// Test with fallback.
+	fs := Init("testdata")
+	_, err = fs.Open("hi.txt")
+	if err != os.ErrNotExist {
+		t.Fatalf("got err %v for open of file not starting with /, expected os.ErrNotExist", err)
 	}
+	zf, err := fs.Open("/hi.txt")
+	tcheck(err, "open file from fallback dir")
+	verifyFile(zf, "hi.txt", "hi\n", false)
+	err = zf.Close()
+	tcheck(err, "closing file from zip")
+	fs.Close()
 
 	// Let's append a zip file to the binary under test.
 	// We have to make a copy because on some systems (ubuntu 16 lts is one) you cannot write to a running binary.
@@ -67,9 +108,7 @@ func TestHttpasset(t *testing.T) {
 
 	// Retry now that we added a zip file to the binary under test.
 	os.Args[0] = newName
-	Close()
-	Fs()
-	err = Error()
+	fs, err = ZipFS()
 	tcheck(err, "opening zip file appended to test binary")
 
 	// Paths must always be absolute.
@@ -83,40 +122,8 @@ func TestHttpasset(t *testing.T) {
 		t.Fatalf("opening bogus path: got success, expected os.ErrNotExist")
 	}
 
-	verifyFile := func(zf http.File, name, contents string, compressed bool) {
-		t.Helper()
-
-		buf, err := ioutil.ReadAll(zf)
-		tcheck(err, "reading file from zip")
-		if string(buf) != contents {
-			t.Fatalf("bad content reading file from zip: got %#v, expected %#v\n", string(buf), contents)
-		}
-
-		off, err := zf.Seek(1, 0)
-		if compressed {
-			if err != errCompressedSeek {
-				t.Fatalf("seek on compressed file: got %v, expected errCompressedSeek", err)
-			}
-		} else {
-			tcheck(err, "seek on uncompressed file")
-			if off != 1 {
-				t.Fatalf("offset after seek: got %d, expected 1", off)
-			}
-		}
-
-		st, err := zf.Stat()
-		tcheck(err, "stat on file")
-		if st.IsDir() || st.Name() != name {
-			t.Fatalf("stat file, got %v %v", st.IsDir(), st.Name())
-		}
-		_, err = zf.Readdir(1)
-		if err != ErrNotDir {
-			t.Fatalf("readdir on file, got %v expected ErrNotDir", err)
-		}
-	}
-
 	// Test an uncompressed file.
-	zf, err := fs.Open("/test.txt")
+	zf, err = fs.Open("/test.txt")
 	tcheck(err, "open file in included zip")
 	verifyFile(zf, "test.txt", "hi", false)
 	err = zf.Close()
@@ -162,5 +169,18 @@ func TestHttpasset(t *testing.T) {
 	err = dir.Close()
 	tcheck(err, "closing dir")
 
-	Close()
+	fs.Close()
+	_, err = fs.Open("/test.txt")
+	if err != os.ErrClosed {
+		t.Fatalf("got %v for open on closed fs, expected os.ErrClosed", err)
+	}
+	fs.Close()
+
+	fs = Init("testdata")
+	zf, err = fs.Open("/test.txt")
+	tcheck(err, "open file in included zip")
+	verifyFile(zf, "test.txt", "hi", false)
+	err = zf.Close()
+	tcheck(err, "closing file from zip")
+	fs.Close()
 }
