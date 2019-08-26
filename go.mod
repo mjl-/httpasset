@@ -1,3 +1,3 @@
-module bitbucket.org/mjl/httpasset
+module github.com/mjl-/httpasset
 
 go 1.12
