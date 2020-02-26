@@ -10,7 +10,7 @@ import (
 	"log"
 	"net/http"
 
-	"bitbucket.org/mjl/httpasset"
+	"github.com/mjl-/httpasset"
 )
 
 var httpFS = httpasset.Init("assets")
